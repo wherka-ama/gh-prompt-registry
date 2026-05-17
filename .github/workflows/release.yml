@@ -9,28 +9,43 @@ permissions:
 
 jobs:
   build-binaries:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        platform:
-          - linux-amd64
-          - linux-arm64
-          - darwin-amd64
-          - darwin-arm64
-          - windows-amd64
-          - windows-arm64
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            node_arch: x64
+          - os: ubuntu-latest
+            platform: linux-arm64
+            node_arch: arm64
+          - os: macos-latest
+            platform: darwin-amd64
+            node_arch: x64
+          - os: macos-latest
+            platform: darwin-arm64
+            node_arch: arm64
+          - os: windows-latest
+            platform: windows-amd64
+            node_arch: x64
+          - os: windows-latest
+            platform: windows-arm64
+            node_arch: arm64
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
       
       - name: Clone official repository
         run: |
           git clone https://github.com/AmadeusITGroup/prompt-registry.git ../prompt-registry
           cd ../prompt-registry
           git checkout ${{ github.event.release.tag_name }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ../prompt-registry/lib/package-lock.json
       
       - name: Install dependencies
         working-directory: ../prompt-registry/lib
@@ -40,25 +55,27 @@ jobs:
         working-directory: ../prompt-registry/lib
         run: npm run build
       
-      - name: Build SEA binary for ${{ matrix.platform }}
+      - name: Build SEA binary
         working-directory: ../prompt-registry/lib
-        run: npm run build:sea:${{ matrix.platform }}
+        run: npm run build:sea
       
       - name: Rename binary to gh extension naming
+        shell: bash
         run: |
-          # Rename to gh-prompt-registry-OS-ARCH[.exe]
+          cd ../prompt-registry/lib/dist
           if [[ "${{ matrix.platform }}" == windows-* ]]; then
-            mv ../prompt-registry/lib/dist/prompt-registry-${{ matrix.platform }} \
-               gh-prompt-registry-${{ matrix.platform }}
+            mv prompt-registry.exe "gh-prompt-registry-${{ matrix.platform }}.exe"
+            mv prompt-registry.exe.sha256 "gh-prompt-registry-${{ matrix.platform }}.exe.sha256"
           else
-            mv ../prompt-registry/lib/dist/prompt-registry-${{ matrix.platform }} \
-               gh-prompt-registry-${{ matrix.platform }}
+            mv prompt-registry "gh-prompt-registry-${{ matrix.platform }}"
+            mv prompt-registry.sha256 "gh-prompt-registry-${{ matrix.platform }}.sha256"
           fi
       
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: gh-prompt-registry-${{ matrix.platform }}
-          path: gh-prompt-registry-${{ matrix.platform }}*
+          path: ../prompt-registry/lib/dist/gh-prompt-registry-${{ matrix.platform }}*
 
   release:
     needs: build-binaries
@@ -68,7 +85,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist/
-      - name: Generate checksums
+      - name: Generate combined checksums
         run: |
           cd dist
           sha256sum * > SHA256SUMS.txt
