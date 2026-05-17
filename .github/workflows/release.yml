@@ -64,18 +64,18 @@ jobs:
         run: |
           cd ../prompt-registry/lib/dist
           if [[ "${{ matrix.platform }}" == windows-* ]]; then
-            mv prompt-registry.exe "gh-prompt-registry-${{ matrix.platform }}.exe"
-            mv prompt-registry.exe.sha256 "gh-prompt-registry-${{ matrix.platform }}.exe.sha256"
+            mv prompt-registry.exe "${{ matrix.platform }}.exe"
+            mv prompt-registry.exe.sha256 "${{ matrix.platform }}.exe.sha256"
           else
-            mv prompt-registry "gh-prompt-registry-${{ matrix.platform }}"
-            mv prompt-registry.sha256 "gh-prompt-registry-${{ matrix.platform }}.sha256"
+            mv prompt-registry "${{ matrix.platform }}"
+            mv prompt-registry.sha256 "${{ matrix.platform }}.sha256"
           fi
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gh-prompt-registry-${{ matrix.platform }}
-          path: ../prompt-registry/lib/dist/gh-prompt-registry-${{ matrix.platform }}*
+          name: ${{ matrix.platform }}
+          path: ../prompt-registry/lib/dist/${{ matrix.platform }}*
 
   release:
     needs: build-binaries

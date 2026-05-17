@@ -73,16 +73,18 @@ gh extension remove gh-prompt-registry
 
 GitHub CLI extensions require specific naming for binary assets:
 ```
-gh-prompt-registry-OS-ARCH[.exe]
+OS-ARCH[.exe]
 
 Examples:
-gh-prompt-registry-linux-amd64
-gh-prompt-registry-linux-arm64
-gh-prompt-registry-darwin-amd64
-gh-prompt-registry-darwin-arm64
-gh-prompt-registry-windows-amd64.exe
-gh-prompt-registry-windows-arm64.exe
+linux-amd64
+linux-arm64
+darwin-amd64
+darwin-arm64
+windows-amd64.exe
+windows-arm64.exe
 ```
+
+The extension name is inferred from the repository name (`gh-prompt-registry`), not part of the binary filename.
 
 ## Release Process
 

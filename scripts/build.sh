@@ -86,8 +86,8 @@ echo "Renaming binaries to gh extension naming convention..."
 cd dist
 for file in prompt-registry-*; do
   if [ -f "$file" ]; then
-    # Rename to gh-prompt-registry-OS-ARCH[.exe]
-    new_name="gh-${file#prompt-registry-}"
+    # Rename to OS-ARCH[.exe] (extension name is inferred from repo name)
+    new_name="${file#prompt-registry-}"
     mv "$file" "$new_name"
     echo "Renamed: $file -> $new_name"
   fi
@@ -97,6 +97,6 @@ cd "$REPO_DIR"
 
 # Move binaries to repository root
 echo "Moving binaries to repository root..."
-mv "$OFFICIAL_REPO_DIR/lib/dist/gh-prompt-registry"* "$REPO_DIR/" 2>/dev/null || true
+mv "$OFFICIAL_REPO_DIR/lib/dist/"* "$REPO_DIR/" 2>/dev/null || true
 
 echo "Build complete!"
