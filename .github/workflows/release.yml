@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  release:
+    types: [prereleased]
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform:
+          - linux-amd64
+          - linux-arm64
+          - darwin-amd64
+          - darwin-arm64
+          - windows-amd64
+          - windows-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Clone official repository
+        run: |
+          git clone https://github.com/AmadeusITGroup/prompt-registry.git ../prompt-registry
+          cd ../prompt-registry
+          git checkout ${{ github.event.release.tag_name }}
+      
+      - name: Install dependencies
+        working-directory: ../prompt-registry/lib
+        run: npm ci
+      
+      - name: Build CLI
+        working-directory: ../prompt-registry/lib
+        run: npm run build
+      
+      - name: Build SEA binary for ${{ matrix.platform }}
+        working-directory: ../prompt-registry/lib
+        run: npm run build:sea:${{ matrix.platform }}
+      
+      - name: Rename binary to gh extension naming
+        run: |
+          # Rename to gh-prompt-registry-OS-ARCH[.exe]
+          if [[ "${{ matrix.platform }}" == windows-* ]]; then
+            mv ../prompt-registry/lib/dist/prompt-registry-${{ matrix.platform }} \
+               gh-prompt-registry-${{ matrix.platform }}
+          else
+            mv ../prompt-registry/lib/dist/prompt-registry-${{ matrix.platform }} \
+               gh-prompt-registry-${{ matrix.platform }}
+          fi
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gh-prompt-registry-${{ matrix.platform }}
+          path: gh-prompt-registry-${{ matrix.platform }}*
+
+  release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          gh release upload "$VERSION" dist/* --clobber
+          gh release edit "$VERSION" --prerelease=false --latest
