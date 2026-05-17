@@ -3,6 +3,21 @@ name: Release
 on:
   release:
     types: [prereleased]
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'Repository to clone (default: AmadeusITGroup/prompt-registry)'
+        required: false
+        default: 'AmadeusITGroup/prompt-registry'
+      branch:
+        description: 'Branch or tag to checkout (default: latest tag)'
+        required: false
+        default: ''
+      test_mode:
+        description: 'Test mode - skip release upload'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: write
@@ -36,9 +51,19 @@ jobs:
       
       - name: Clone official repository
         run: |
-          git clone https://github.com/AmadeusITGroup/prompt-registry.git ../prompt-registry
+          REPO="${{ github.event.inputs.repo || 'AmadeusITGroup/prompt-registry' }}"
+          git clone https://github.com/${REPO}.git ../prompt-registry
           cd ../prompt-registry
-          git checkout ${{ github.event.release.tag_name }}
+          
+          if [ -n "${{ github.event.inputs.branch }}" ]; then
+            git checkout "${{ github.event.inputs.branch }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            git checkout ${{ github.event.release.tag_name }}
+          else
+            git fetch --tags
+            LATEST_TAG=$(git describe --tags --abbrev=0)
+            git checkout "$LATEST_TAG"
+          fi
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,6 +104,7 @@ jobs:
 
   release:
     needs: build-binaries
+    if: ${{ github.event.inputs.test_mode != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,6 +119,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          else
+            VERSION="test-${{ github.run_number }}"
+          fi
           gh release upload "$VERSION" dist/* --clobber
-          gh release edit "$VERSION" --prerelease=false --latest
+          if [ "${{ github.event_name }}" = "release" ]; then
+            gh release edit "$VERSION" --prerelease=false --latest
+          fi
