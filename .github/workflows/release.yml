@@ -82,7 +82,21 @@ jobs:
         working-directory: prompt-registry/lib
         run: |
           node esbuild.config.mjs
-          bash scripts/generate-sea.sh ./dist/prompt-registry
+          
+          # Windows-specific handling for copying Node executable
+          if [ "$(uname)" = "Windows_NT" ] || [ -n "$OS" ]; then
+            # On Windows, use PowerShell to copy the Node executable
+            powershell -Command "Copy-Item (Get-Command node).Source './dist/prompt-registry.exe'"
+            node --experimental-sea-config sea-config.json
+            npx -y postject "./dist/prompt-registry.exe" NODE_SEA_BLOB sea-prep.blob \
+              --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+            # Generate checksum on Windows
+            powershell -Command "Get-FileHash './dist/prompt-registry.exe' -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Out-File './dist/prompt-registry.exe.sha256'"
+            # Cleanup
+            rm -f sea-prep.blob
+          else
+            bash scripts/generate-sea.sh ./dist/prompt-registry
+          fi
       
       - name: Rename binary to gh extension naming
         shell: bash
