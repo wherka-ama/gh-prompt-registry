@@ -101,7 +101,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: ../prompt-registry/lib/dist/${{ matrix.platform }}*
+          path: ${{ github.workspace }}/../prompt-registry/lib/dist/${{ matrix.platform }}*
 
   release:
     needs: build-binaries
