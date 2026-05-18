@@ -70,7 +70,6 @@ jobs:
         with:
           node-version: 'lts/*'
           cache: 'npm'
-          cache-dependency-path: ../prompt-registry/lib/package-lock.json
       
       - name: Install dependencies
         working-directory: ../prompt-registry/lib
