@@ -158,20 +158,31 @@ jobs:
             VERSION="test-${{ github.run_number }}"
           fi
           
+          echo "VERSION=$VERSION"
+          echo "Event name: ${{ github.event_name }}"
+          echo "Create release: ${{ github.event.inputs.create_release }}"
+          
           # Create release if it doesn't exist (for workflow_dispatch with create_release)
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+            echo "Checking if release $VERSION exists..."
             if ! gh release view "$VERSION" > /dev/null 2>&1; then
+              echo "Release $VERSION does not exist, creating..."
               # Create tag if it doesn't exist
               if ! git tag -l "$VERSION" | grep -q "$VERSION"; then
+                echo "Creating tag $VERSION..."
                 git tag "$VERSION"
                 git push origin "$VERSION"
               fi
               # Create release
+              echo "Creating release $VERSION..."
               gh release create "$VERSION" --title "Release $VERSION" --draft
+            else
+              echo "Release $VERSION already exists"
             fi
           fi
           
           # Upload files from subdirectories
+          echo "Uploading files to release $VERSION..."
           find dist -type f -exec gh release upload "$VERSION" {} --clobber \;
           if [ "${{ github.event_name }}" = "release" ]; then
             gh release edit "$VERSION" --prerelease=false --latest
