@@ -78,6 +78,7 @@ jobs:
         run: npm run build
       
       - name: Build SEA binary
+        shell: bash
         working-directory: ../prompt-registry/lib
         run: npm run build:sea
       
@@ -98,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: dist/${{ matrix.platform }}*
+          path: ../prompt-registry/lib/dist/${{ matrix.platform }}*
 
   release:
     needs: build-binaries
