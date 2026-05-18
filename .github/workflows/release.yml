@@ -14,9 +14,9 @@ on:
         required: false
         default: ''
       test_mode:
-        description: 'Test mode - skip release upload'
+        description: 'Test mode (skip release job)'
         required: false
-        default: 'false'
+        default: 'true'
         type: boolean
 
 permissions:
