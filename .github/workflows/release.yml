@@ -25,6 +25,9 @@ permissions:
 jobs:
   build-binaries:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ../prompt-registry/lib
     strategy:
       matrix:
         include:
@@ -50,42 +53,39 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Clone official repository
+        shell: bash
         run: |
           REPO="${{ github.event.inputs.repo || 'AmadeusITGroup/prompt-registry' }}"
           git clone https://github.com/${REPO}.git ../prompt-registry
           cd ../prompt-registry
           
-          if [ -n "${{ github.event.inputs.branch }}" ]; then
-            git checkout "${{ github.event.inputs.branch }}"
-          elif [ "${{ github.event_name }}" = "release" ]; then
+          if [ "${{ github.event_name }}" = "release" ]; then
             git checkout ${{ github.event.release.tag_name }}
+          elif [ -n "${{ github.event.inputs.branch }}" ]; then
+            git checkout "${{ github.event.inputs.branch }}"
           else
-            git fetch --tags
-            LATEST_TAG=$(git describe --tags --abbrev=0)
-            git checkout "$LATEST_TAG"
+            git checkout main
           fi
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
+          cache: 'npm'
       
       - name: Install dependencies
-        working-directory: ../prompt-registry/lib
         run: npm ci
       
       - name: Build CLI
-        working-directory: ../prompt-registry/lib
         run: npm run build
       
       - name: Build SEA binary
-        working-directory: ../prompt-registry/lib
         run: npm run build:sea
       
       - name: Rename binary to gh extension naming
         shell: bash
         run: |
-          cd ../prompt-registry/lib/dist
+          cd dist
           if [[ "${{ matrix.platform }}" == windows-* ]]; then
             mv prompt-registry.exe "${{ matrix.platform }}.exe"
             mv prompt-registry.exe.sha256 "${{ matrix.platform }}.exe.sha256"
@@ -98,7 +98,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: ../prompt-registry/lib/dist/${{ matrix.platform }}*
+          path: dist/${{ matrix.platform }}*
 
   release:
     needs: build-binaries
