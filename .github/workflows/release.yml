@@ -171,7 +171,8 @@ jobs:
             fi
           fi
           
-          gh release upload "$VERSION" dist/* --clobber
+          # Upload files from subdirectories
+          find dist -type f -exec gh release upload "$VERSION" {} --clobber \;
           if [ "${{ github.event_name }}" = "release" ]; then
             gh release edit "$VERSION" --prerelease=false --latest
           fi
