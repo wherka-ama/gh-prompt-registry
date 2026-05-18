@@ -16,8 +16,17 @@ on:
       test_mode:
         description: 'Test mode (skip release job)'
         required: false
-        default: 'true'
+        default: true
         type: boolean
+      create_release:
+        description: 'Create release and tag (requires tag_name input)'
+        required: false
+        default: false
+        type: boolean
+      tag_name:
+        description: 'Tag name for release (required if create_release is true)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -119,7 +128,7 @@ jobs:
 
   release:
     needs: build-binaries
-    if: ${{ github.event.inputs.test_mode != 'true' }}
+    if: ${{ github.event.inputs.create_release == 'true' || github.event_name == 'release' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -143,9 +152,25 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            VERSION="${{ github.event.inputs.tag_name }}"
           else
             VERSION="test-${{ github.run_number }}"
           fi
+          
+          # Create release if it doesn't exist (for workflow_dispatch with create_release)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+            if ! gh release view "$VERSION" > /dev/null 2>&1; then
+              # Create tag if it doesn't exist
+              if ! git tag -l "$VERSION" | grep -q "$VERSION"; then
+                git tag "$VERSION"
+                git push origin "$VERSION"
+              fi
+              # Create release
+              gh release create "$VERSION" --title "Release $VERSION" --draft
+            fi
+          fi
+          
           gh release upload "$VERSION" dist/* --clobber
           if [ "${{ github.event_name }}" = "release" ]; then
             gh release edit "$VERSION" --prerelease=false --latest
