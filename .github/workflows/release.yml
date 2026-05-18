@@ -80,7 +80,9 @@ jobs:
       - name: Build SEA binary
         shell: bash
         working-directory: ../prompt-registry/lib
-        run: npm run build:sea
+        run: |
+          node esbuild.config.mjs
+          bash scripts/generate-sea.sh ./dist/prompt-registry
       
       - name: Rename binary to gh extension naming
         shell: bash
