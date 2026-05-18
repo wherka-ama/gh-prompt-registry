@@ -53,8 +53,8 @@ jobs:
         shell: bash
         run: |
           REPO="${{ github.event.inputs.repo || 'AmadeusITGroup/prompt-registry' }}"
-          git clone https://github.com/${REPO}.git ../prompt-registry
-          cd ../prompt-registry
+          git clone https://github.com/${REPO}.git prompt-registry
+          cd prompt-registry
           
           if [ "${{ github.event_name }}" = "release" ]; then
             git checkout ${{ github.event.release.tag_name }}
@@ -70,23 +70,23 @@ jobs:
           node-version: 'lts/*'
       
       - name: Install dependencies
-        working-directory: ../prompt-registry/lib
+        working-directory: prompt-registry/lib
         run: npm ci
       
       - name: Build CLI
-        working-directory: ../prompt-registry/lib
+        working-directory: prompt-registry/lib
         run: npm run build
       
       - name: Build SEA binary
         shell: bash
-        working-directory: ../prompt-registry/lib
+        working-directory: prompt-registry/lib
         run: |
           node esbuild.config.mjs
           bash scripts/generate-sea.sh ./dist/prompt-registry
       
       - name: Rename binary to gh extension naming
         shell: bash
-        working-directory: ../prompt-registry/lib
+        working-directory: prompt-registry/lib
         run: |
           cd dist
           if [[ "${{ matrix.platform }}" == windows-* ]]; then
@@ -101,7 +101,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: ${{ github.workspace }}/../prompt-registry/lib/dist/${{ matrix.platform }}*
+          path: prompt-registry/lib/dist/${{ matrix.platform }}*
 
   release:
     needs: build-binaries
