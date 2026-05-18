@@ -129,10 +129,14 @@ jobs:
       - name: Generate combined checksums
         run: |
           cd dist
-          # Flatten directory structure from download-artifact
-          find . -mindepth 2 -type f -exec mv {} . \;
-          find . -mindepth 1 -type d -delete
-          sha256sum * > SHA256SUMS.txt
+          # Generate checksums from subdirectories
+          for dir in */; do
+            for file in "${dir}"*; do
+              if [ -f "$file" ]; then
+                sha256sum "$file" >> SHA256SUMS.txt
+              fi
+            done
+          done
       - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
