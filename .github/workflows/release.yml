@@ -83,6 +83,7 @@ jobs:
       
       - name: Rename binary to gh extension naming
         shell: bash
+        working-directory: ../prompt-registry/lib
         run: |
           cd dist
           if [[ "${{ matrix.platform }}" == windows-* ]]; then
@@ -97,7 +98,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: dist/${{ matrix.platform }}*
+          path: ../prompt-registry/lib/dist/${{ matrix.platform }}*
 
   release:
     needs: build-binaries
