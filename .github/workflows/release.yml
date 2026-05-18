@@ -25,9 +25,6 @@ permissions:
 jobs:
   build-binaries:
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: ../prompt-registry/lib
     strategy:
       matrix:
         include:
@@ -71,15 +68,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
-          cache: 'npm'
       
       - name: Install dependencies
+        working-directory: ../prompt-registry/lib
         run: npm ci
       
       - name: Build CLI
+        working-directory: ../prompt-registry/lib
         run: npm run build
       
       - name: Build SEA binary
+        working-directory: ../prompt-registry/lib
         run: npm run build:sea
       
       - name: Rename binary to gh extension naming
