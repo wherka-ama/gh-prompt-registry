@@ -130,10 +130,8 @@ jobs:
         run: |
           cd dist
           # Flatten directory structure from download-artifact
-          for dir in */; do
-            mv "${dir}"* .
-            rmdir "${dir}"
-          done
+          find . -mindepth 2 -type f -exec mv {} . \;
+          find . -mindepth 1 -type d -delete
           sha256sum * > SHA256SUMS.txt
       - name: Upload release assets
         env:
