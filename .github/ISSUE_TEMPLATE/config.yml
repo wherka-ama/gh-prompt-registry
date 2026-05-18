@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reporting
+    url: mailto:opensource@amadeus.com
+    about: Report security vulnerabilities privately.

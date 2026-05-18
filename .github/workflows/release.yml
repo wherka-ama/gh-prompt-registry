@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  release:
+    types: [prereleased]
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'Repository to clone (default: AmadeusITGroup/prompt-registry)'
+        required: false
+        default: 'AmadeusITGroup/prompt-registry'
+      branch:
+        description: 'Branch or tag to checkout (default: latest tag)'
+        required: false
+        default: ''
+      test_mode:
+        description: 'Test mode (skip release job)'
+        required: false
+        default: true
+        type: boolean
+      create_release:
+        description: 'Create release and tag (requires tag_name input)'
+        required: false
+        default: false
+        type: boolean
+      tag_name:
+        description: 'Tag name for release (required if create_release is true)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            node_arch: x64
+          - os: ubuntu-latest
+            platform: linux-arm64
+            node_arch: arm64
+          - os: macos-latest
+            platform: darwin-amd64
+            node_arch: x64
+          - os: macos-latest
+            platform: darwin-arm64
+            node_arch: arm64
+          - os: windows-latest
+            platform: windows-amd64
+            node_arch: x64
+          - os: windows-latest
+            platform: windows-arm64
+            node_arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Clone official repository
+        shell: bash
+        run: |
+          REPO="${{ github.event.inputs.repo || 'AmadeusITGroup/prompt-registry' }}"
+          git clone https://github.com/${REPO}.git prompt-registry
+          cd prompt-registry
+          
+          if [ "${{ github.event_name }}" = "release" ]; then
+            git checkout ${{ github.event.release.tag_name }}
+          elif [ -n "${{ github.event.inputs.branch }}" ]; then
+            git checkout "${{ github.event.inputs.branch }}"
+          else
+            git checkout main
+          fi
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+      
+      - name: Install dependencies
+        working-directory: prompt-registry/lib
+        run: npm ci
+      
+      - name: Build CLI
+        working-directory: prompt-registry/lib
+        run: npm run build
+      
+      - name: Build SEA binary
+        shell: bash
+        working-directory: prompt-registry/lib
+        run: |
+          node esbuild.config.mjs
+          
+          # Windows-specific handling for copying Node executable
+          if [ "$(uname)" = "Windows_NT" ] || [ -n "$OS" ]; then
+            # On Windows, use PowerShell to copy the Node executable
+            powershell -Command "Copy-Item (Get-Command node).Source './dist/prompt-registry.exe'"
+            node --experimental-sea-config sea-config.json
+            npx -y postject "./dist/prompt-registry.exe" NODE_SEA_BLOB sea-prep.blob \
+              --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+            # Generate checksum on Windows
+            powershell -Command "Get-FileHash './dist/prompt-registry.exe' -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Out-File './dist/prompt-registry.exe.sha256'"
+            # Cleanup
+            rm -f sea-prep.blob
+          else
+            bash scripts/generate-sea.sh ./dist/prompt-registry
+          fi
+      
+      - name: Rename binary to gh extension naming
+        shell: bash
+        working-directory: prompt-registry/lib
+        run: |
+          cd dist
+          if [[ "${{ matrix.platform }}" == windows-* ]]; then
+            mv prompt-registry.exe "${{ matrix.platform }}.exe"
+            mv prompt-registry.exe.sha256 "${{ matrix.platform }}.exe.sha256"
+          else
+            mv prompt-registry "${{ matrix.platform }}"
+            mv prompt-registry.sha256 "${{ matrix.platform }}.sha256"
+          fi
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: prompt-registry/lib/dist/${{ matrix.platform }}*
+
+  release:
+    needs: build-binaries
+    if: ${{ github.event.inputs.create_release == 'true' || github.event_name == 'release' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/
+      - name: Generate combined checksums
+        run: |
+          cd dist
+          # Generate checksums from subdirectories
+          for dir in */; do
+            for file in "${dir}"*; do
+              if [ -f "$file" ]; then
+                sha256sum "$file" >> SHA256SUMS.txt
+              fi
+            done
+          done
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            VERSION="${{ github.event.inputs.tag_name }}"
+          else
+            VERSION="test-${{ github.run_number }}"
+          fi
+          
+          # Create release if it doesn't exist (for workflow_dispatch with create_release)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+            if ! gh release view "$VERSION" > /dev/null 2>&1; then
+              # Create tag if it doesn't exist
+              if ! git tag -l "$VERSION" | grep -q "$VERSION"; then
+                git tag "$VERSION"
+                git push origin "$VERSION"
+              fi
+              # Create release
+              gh release create "$VERSION" --title "Release $VERSION" --draft
+            fi
+          fi
+          
+          # Upload files from subdirectories
+          find dist -type f -exec gh release upload "$VERSION" {} --clobber \;
+          if [ "${{ github.event_name }}" = "release" ]; then
+            gh release edit "$VERSION" --prerelease=false --latest
+          fi
