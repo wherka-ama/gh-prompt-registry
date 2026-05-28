@@ -6,34 +6,19 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-
-# Load .env.local if it exists
-if [ -f "$REPO_DIR/.env.local" ]; then
-  source "$REPO_DIR/.env.local"
-fi
-
-# Set defaults (can be overridden by .env.local or command-line args)
-OFFICIAL_REPO_URL="${REPO_URL:-https://github.com/AmadeusITGroup/prompt-registry.git}"
+OFFICIAL_REPO_URL=https://github.com/AmadeusITGroup/prompt-registry.git
 OFFICIAL_REPO_DIR="$REPO_DIR/prompt-registry"
-BRANCH="${BRANCH:-}"
 
 # Parse arguments
-TAG=""
+REF="${PROMPT_REGISTRY_REF:-}"
 LOCAL=false
 PLATFORM=""
+LOCAL_REPO="${PROMPT_REGISTRY_REPO:-}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --tag)
-      TAG="$2"
-      shift 2
-      ;;
-    --branch)
-      BRANCH="$2"
-      shift 2
-      ;;
-    --repo-url)
-      OFFICIAL_REPO_URL="$2"
+    --ref)
+      REF="$2"
       shift 2
       ;;
     --local)
@@ -44,6 +29,10 @@ while [[ $# -gt 0 ]]; do
       PLATFORM="$2"
       shift 2
       ;;
+    --local-repo)
+      LOCAL_REPO="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
       exit 1
@@ -51,87 +40,86 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Show configuration
+echo "Configuration:"
+echo "  Repository: ${LOCAL_REPO:-$OFFICIAL_REPO_URL}"
+echo "  Ref: ${REF:-latest}"
+echo "  Local build: $LOCAL"
+
+# Use local repository if specified
+if [ -n "$LOCAL_REPO" ]; then
+  # Check if it's a local directory or a URL
+  if [ -d "$LOCAL_REPO" ]; then
+    OFFICIAL_REPO_DIR="$LOCAL_REPO"
+    echo "Using local directory: $OFFICIAL_REPO_DIR"
+    SKIP_GIT=true
+  elif [[ "$LOCAL_REPO" == http://* ]] || [[ "$LOCAL_REPO" == https://* ]] || [[ "$LOCAL_REPO" == git@* ]]; then
+    OFFICIAL_REPO_DIR="$REPO_DIR/prompt-registry"
+    OFFICIAL_REPO_URL="$LOCAL_REPO"
+    echo "Using remote repository: $OFFICIAL_REPO_URL"
+  else
+    OFFICIAL_REPO_DIR="$LOCAL_REPO"
+    echo "Using local path: $OFFICIAL_REPO_DIR"
+    SKIP_GIT=true
+  fi
+fi
+
 # Clone official repository if not already present
 if [ ! -d "$OFFICIAL_REPO_DIR" ]; then
   echo "Cloning official repository..."
   git clone "$OFFICIAL_REPO_URL" "$OFFICIAL_REPO_DIR"
+else
+  echo "Using existing repository..."
 fi
 
 cd "$OFFICIAL_REPO_DIR"
 
-# Fetch latest tags and branches
-echo "Fetching latest tags and branches..."
-git fetch --tags
-git fetch origin
-
-# Determine what to checkout
-if [ -n "$TAG" ]; then
-  echo "Checking out tag: $TAG"
-  git checkout "$TAG"
-elif [ -n "$BRANCH" ]; then
-  echo "Checking out branch: $BRANCH"
-  # Try to checkout the branch, creating a local tracking branch if needed
-  if git show-ref --quiet --verify "refs/remotes/origin/$BRANCH"; then
-    # Remote branch exists, create local tracking branch
-    git checkout -b "$BRANCH" "origin/$BRANCH" 2>/dev/null || git checkout "$BRANCH"
-  else
-    # Try direct checkout (in case it's already a local branch or detached)
-    git checkout "$BRANCH"
-  fi
+# Skip git operations if using local repository
+if [ "$SKIP_GIT" = true ]; then
+  echo "Skipping git checkout (using local repository state)"
 else
-  echo "Checking out latest tag..."
-  LATEST_TAG=$(git describe --tags --abbrev=0)
-  git checkout "$LATEST_TAG"
+  # Fetch latest tags and branches
+  echo "Fetching latest tags and branches..."
+  git fetch --tags --all
+
+  # Checkout specific ref if provided
+  if [ -n "$REF" ]; then
+    echo "Checking out ref: $REF"
+    git checkout "$REF"
+  else
+    echo "Checking out latest tag..."
+    LATEST_TAG=$(git describe --tags --abbrev=0)
+    git checkout "$LATEST_TAG"
+  fi
 fi
 
-cd lib
+cd "$OFFICIAL_REPO_DIR/packages/cli"
 
 # Install dependencies
 echo "Installing dependencies..."
-npm ci
+pnpm install
 
 # Build CLI
 echo "Building CLI..."
-npm run build
+pnpm run build
 
 # Build SEA binaries
 echo "Building SEA binaries..."
 if [ "$LOCAL" = true ]; then
   # Build for current platform only
   echo "Building for current platform only..."
-  npm run build:sea
+  cd "$OFFICIAL_REPO_DIR/packages/cli"
+  pnpm run build:sea:local
 else
-  # Build for all platforms
-  echo "Building for all platforms..."
-  # Add platform-specific build commands here
-  # This will be implemented in Phase 3
-  echo "Cross-platform build not yet implemented (Phase 3)"
+  # Build for all platforms (handled by CI matrix)
+  echo "Cross-platform builds handled by CI matrix"
+  echo "For local builds, use --local flag"
+  exit 1
 fi
 
 # Rename binaries to gh extension naming convention
 echo "Renaming binaries to gh extension naming convention..."
-cd dist
-
-# Detect current platform to generate proper binary name
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
-
-# Handle architecture name mappings
-case "$ARCH" in
-  x86_64)
-    ARCH="amd64"
-    ;;
-  aarch64)
-    ARCH="arm64"
-    ;;
-esac
-
-CURRENT_BINARY_NAME="$OS-$ARCH"
-if [ "$OS" = "windows" ] || [ "$OS" = "msys" ] || [ "$OS" = "cygwin" ]; then
-  CURRENT_BINARY_NAME="$CURRENT_BINARY_NAME.exe"
-fi
-
-# Rename existing binaries to gh extension convention
+cd "$OFFICIAL_REPO_DIR/packages/cli/dist"
 for file in prompt-registry-*; do
   if [ -f "$file" ]; then
     # Rename to OS-ARCH[.exe] (extension name is inferred from repo name)
@@ -141,52 +129,25 @@ for file in prompt-registry-*; do
   fi
 done
 
-# Also handle the case where binary is named 'prompt-registry' (current platform build)
-if [ -f "prompt-registry" ]; then
-  # Rename to OS-ARCH convention
-  new_binary_name="$CURRENT_BINARY_NAME"
-  mv "prompt-registry" "$new_binary_name"
-  echo "Renamed: prompt-registry -> $new_binary_name"
-fi
-
 cd "$REPO_DIR"
 
-# Move only binary files to repository root
+# Move only binary files and checksums to repository root
 echo "Moving binaries to repository root..."
-cd "$OFFICIAL_REPO_DIR/lib/dist"
-
-# Find and move only files that look like binaries (not directories, not .js, .d.ts, .sha256, etc.)
-# Binary files are: linux-*, darwin-*, windows-*.exe
-for binary in linux-* darwin-* windows-*.exe; do
-  if [ -f "$binary" ]; then
-    mv "$binary" "$REPO_DIR/"
-    echo "Moved: $binary"
+cd "$OFFICIAL_REPO_DIR/packages/cli/dist"
+for file in *; do
+  if [ -f "$file" ]; then
+    # Only move files that match the binary naming pattern (e.g., linux-x64, darwin-arm64)
+    # Skip TypeScript compilation artifacts (.js, .d.ts, .map files)
+    case "$file" in
+      *.js|*.d.ts|*.map)
+        echo "Skipping TypeScript artifact: $file"
+        ;;
+      *)
+        mv "$file" "$REPO_DIR/"
+        echo "Moved: $file"
+        ;;
+    esac
   fi
 done
-
-# Move checksum file if it exists
-for checksum in *.sha256; do
-  if [ -f "$checksum" ]; then
-    mv "$checksum" "$REPO_DIR/"
-    echo "Moved: $checksum"
-  fi
-done
-
-cd "$REPO_DIR"
-
-# For local development, create a gh extension-friendly alias
-if [ "$LOCAL" = true ]; then
-  echo "Creating local extension alias..."
-  LOCAL_ALIAS_NAME="gh-prompt-registry"
-  if [ "$CURRENT_BINARY_NAME" != "${CURRENT_BINARY_NAME%.exe}" ]; then
-    LOCAL_ALIAS_NAME="$LOCAL_ALIAS_NAME.exe"
-  fi
-
-  if [ -f "$REPO_DIR/$CURRENT_BINARY_NAME" ]; then
-    cp "$REPO_DIR/$CURRENT_BINARY_NAME" "$REPO_DIR/$LOCAL_ALIAS_NAME"
-    chmod +x "$REPO_DIR/$LOCAL_ALIAS_NAME"
-    echo "Created: $LOCAL_ALIAS_NAME"
-  fi
-fi
 
 echo "Build complete!"
