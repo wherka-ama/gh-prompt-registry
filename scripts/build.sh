@@ -85,7 +85,7 @@ else
   # Checkout specific ref if provided
   if [ -n "$REF" ]; then
     echo "Checking out ref: $REF"
-    git checkout "$REF"
+    git checkout "origin/$REF" -b "$REF"
   else
     echo "Checking out latest tag..."
     LATEST_TAG=$(git describe --tags --abbrev=0)
@@ -93,10 +93,9 @@ else
   fi
 fi
 
-cd "$OFFICIAL_REPO_DIR/packages/cli"
-
-# Install dependencies
+# Install dependencies from workspace root to link workspace packages
 echo "Installing dependencies..."
+cd "$OFFICIAL_REPO_DIR"
 pnpm install
 
 # Build CLI
