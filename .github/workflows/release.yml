@@ -78,21 +78,13 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Detect package manager and install dependencies
+      - name: Install dependencies
         working-directory: prompt-registry
         shell: bash
         run: |
           if [ -f "pnpm-lock.yaml" ]; then
             echo "Using pnpm"
-            # Detect required pnpm major version from lockfile (v6.x = pnpm 8, v9.x = pnpm 9)
-            LOCKFILE_VER=$(grep '^lockfileVersion:' pnpm-lock.yaml | grep -o '[0-9]*' | head -1)
-            if [ "$LOCKFILE_VER" -ge 9 ] 2>/dev/null; then
-              PNPM_MAJOR=9
-            else
-              PNPM_MAJOR=8
-            fi
-            echo "Detected pnpm major version: $PNPM_MAJOR"
-            npm install -g pnpm@$PNPM_MAJOR
+            corepack enable
             pnpm install
             echo "PACKAGE_MANAGER=pnpm" >> $GITHUB_ENV
           elif [ -f "package-lock.json" ]; then
