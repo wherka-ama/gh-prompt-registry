@@ -28,13 +28,6 @@ gh prompt-registry bundle build
 gh prompt-registry install
 ```
 
-## Contributing
-
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, workflow, and review expectations.
-
-For issues and feature requests in the core CLI project, use:
-https://github.com/AmadeusITGroup/prompt-registry/issues
-
 ## Development
 
 ### Local Build
@@ -43,50 +36,43 @@ https://github.com/AmadeusITGroup/prompt-registry/issues
 # Build for current platform only
 make build-local
 
-# Build for all platforms (requires Phase 3 implementation)
+# Build for all platforms (handled by CI matrix)
 make build
 
 # Clean build artifacts
 make clean
 ```
 
-### Local Development with Fork
-
-For local development, you can override the repository URL and branch:
-
-```bash
-# Copy the example configuration
-cp .env.local.example .env.local
-
-# Edit .env.local with your fork details
-REPO_URL="https://github.com/your-username/prompt-registry.git"
-BRANCH="feature/my-feature"
-
-# Build uses your fork and branch automatically
-make build-local
-```
-
-Alternatively, use CLI arguments:
-
-```bash
-# Override repository and branch via CLI
-./scripts/build.sh --repo-url "https://github.com/your-username/prompt-registry.git" --branch "feature/my-feature" --local
-
-# Or build from a specific tag
-./scripts/build.sh --tag v1.0.4 --local
-```
-
-Note: CLI arguments take precedence over `.env.local` settings.
-
 ### Manual Build
 
 ```bash
-# Build from specific tag
-./scripts/build.sh --tag v1.0.4
+# Build from specific ref (tag or branch)
+./scripts/build.sh --ref v1.0.4
+
+# Build from specific branch
+./scripts/build.sh --ref main
 
 # Build for current platform
 ./scripts/build.sh --local
+
+# Build using local repository (with environment variable)
+PROMPT_REGISTRY_REPO=/path/to/prompt-registry ./scripts/build.sh --local
+
+# Build using local repository with specific ref (with environment variables)
+PROMPT_REGISTRY_REPO=/path/to/prompt-registry PROMPT_REGISTRY_REF=v1.0.4 ./scripts/build.sh --local
+
+# Build using remote repository with specific branch (with environment variables)
+PROMPT_REGISTRY_REPO=https://github.com/user/prompt-registry.git PROMPT_REGISTRY_REF=main ./scripts/build.sh --local
+
+# Build using local repository (with command-line flag)
+./scripts/build.sh --local --local-repo /path/to/prompt-registry
 ```
+
+**Environment Variables:**
+- `PROMPT_REGISTRY_REPO` - Path or URL to prompt-registry repository (overrides cloning from GitHub)
+- `PROMPT_REGISTRY_REF` - Git ref (tag or branch) to checkout (defaults to latest tag if not specified)
+
+**Note:** The SEA (Single Executable Application) build process is now implemented in the new monorepo structure. The build produces standalone binaries for all platforms.
 
 ### Testing GitHub CLI Extension Locally
 
@@ -94,11 +80,8 @@ Note: CLI arguments take precedence over `.env.local` settings.
 # Build locally
 make build-local
 
-# Install as local extension
-gh extension install ./gh-prompt-registry
-
-# On Windows, use the executable name instead
-# gh extension install ./gh-prompt-registry.exe
+# Install as local extension (requires SEA binaries)
+gh extension install ./gh-prompt-registry-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)
 
 # Test the extension
 gh prompt-registry --help
@@ -124,14 +107,12 @@ windows-arm64.exe
 
 The extension name is inferred from the repository name (`gh-prompt-registry`), not part of the binary filename.
 
-For local development, `make build-local` also creates a `gh-prompt-registry` (or `gh-prompt-registry.exe` on Windows) alias alongside the release-style binary name so it can be installed directly with `gh extension install`.
-
 ## Release Process
 
 Releases are automated via GitHub Actions:
 1. Create a release in the main Prompt Registry repository
 2. This repository's workflow triggers on the release
-3. Binaries are built for all platforms
+3. Binaries are built for all platforms using SEA (Single Executable Application)
 4. Binaries are renamed to gh extension naming convention
 5. Checksums are generated
 6. Assets are uploaded to the release
@@ -141,28 +122,14 @@ Releases are automated via GitHub Actions:
 ```
 gh-prompt-registry/
 ├── .github/
-│   ├── CODEOWNERS               # Default code owners
-│   ├── PULL_REQUEST_TEMPLATE.md # PR checklist and context
 │   └── workflows/
 │       └── release.yml          # CI/CD for building and releasing
 ├── scripts/
 │   └── build.sh                  # Build script for all platforms
 ├── Makefile                      # Build targets for local development
-├── CONTRIBUTING.md               # Contributor workflow
-├── CODE_OF_CONDUCT.md            # Community behavior expectations
-├── SECURITY.md                   # Vulnerability reporting policy
-├── LICENSE                       # MIT license
 └── README.md                     # This file
 ```
 
-## Maintainers
-
-- [@wherka-ama](https://github.com/wherka-ama)
-
-## Security
-
-For responsible disclosure guidance, see [SECURITY.md](SECURITY.md).
-
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT License - see the main Prompt Registry repository for details.

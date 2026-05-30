@@ -76,55 +76,51 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
-      
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
       - name: Install dependencies
-        working-directory: prompt-registry/lib
-        run: npm ci
-      
+        working-directory: prompt-registry
+        run: pnpm install
+
       - name: Build CLI
-        working-directory: prompt-registry/lib
-        run: npm run build
-      
+        working-directory: prompt-registry
+        run: pnpm --filter @prompt-registry/cli run build
+
       - name: Build SEA binary
         shell: bash
-        working-directory: prompt-registry/lib
-        run: |
-          node esbuild.config.mjs
-          
-          # Windows-specific handling for copying Node executable
-          if [ "$(uname)" = "Windows_NT" ] || [ -n "$OS" ]; then
-            # On Windows, use PowerShell to copy the Node executable
-            powershell -Command "Copy-Item (Get-Command node).Source './dist/prompt-registry.exe'"
-            node --experimental-sea-config sea-config.json
-            npx -y postject "./dist/prompt-registry.exe" NODE_SEA_BLOB sea-prep.blob \
-              --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
-            # Generate checksum on Windows
-            powershell -Command "Get-FileHash './dist/prompt-registry.exe' -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Out-File './dist/prompt-registry.exe.sha256'"
-            # Cleanup
-            rm -f sea-prep.blob
-          else
-            bash scripts/generate-sea.sh ./dist/prompt-registry
-          fi
-      
+        working-directory: prompt-registry/packages/cli
+        run: pnpm run build:sea:local
+
       - name: Rename binary to gh extension naming
         shell: bash
-        working-directory: prompt-registry/lib
+        working-directory: prompt-registry/packages/cli
         run: |
           cd dist
-          if [[ "${{ matrix.platform }}" == windows-* ]]; then
-            mv prompt-registry.exe "${{ matrix.platform }}.exe"
-            mv prompt-registry.exe.sha256 "${{ matrix.platform }}.exe.sha256"
-          else
-            mv prompt-registry "${{ matrix.platform }}"
-            mv prompt-registry.sha256 "${{ matrix.platform }}.sha256"
-          fi
-      
+          # Find the generated binary (pattern: prompt-registry-<platform>-<arch>)
+          for file in prompt-registry-*; do
+            if [[ "${{ matrix.platform }}" == windows-* ]]; then
+              if [[ "$file" == *.exe ]]; then
+                mv "$file" "${{ matrix.platform }}.exe"
+                mv "${file}.sha256" "${{ matrix.platform }}.exe.sha256"
+              fi
+            else
+              if [[ ! "$file" == *.sha256 ]]; then
+                mv "$file" "${{ matrix.platform }}"
+                mv "${file}.sha256" "${{ matrix.platform }}.sha256"
+              fi
+            fi
+          done
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}
-          path: prompt-registry/lib/dist/${{ matrix.platform }}*
+          path: prompt-registry/packages/cli/dist/${{ matrix.platform }}*
 
   release:
     needs: build-binaries
