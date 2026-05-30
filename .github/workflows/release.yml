@@ -78,23 +78,44 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
-      - name: Install dependencies
+      - name: Detect package manager and install dependencies
         working-directory: prompt-registry
-        run: pnpm install
+        shell: bash
+        run: |
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "Using pnpm"
+            corepack enable pnpm
+            pnpm install
+            echo "PACKAGE_MANAGER=pnpm" >> $GITHUB_ENV
+          elif [ -f "package-lock.json" ]; then
+            echo "Using npm"
+            npm ci
+            echo "PACKAGE_MANAGER=npm" >> $GITHUB_ENV
+          else
+            echo "No lockfile found, running npm install"
+            npm install
+            echo "PACKAGE_MANAGER=npm" >> $GITHUB_ENV
+          fi
 
       - name: Build CLI
         working-directory: prompt-registry
-        run: pnpm --filter @prompt-registry/cli run build
+        shell: bash
+        run: |
+          if [ "${{ env.PACKAGE_MANAGER }}" = "pnpm" ]; then
+            pnpm --filter @prompt-registry/cli run build
+          else
+            cd packages/cli && npm run build
+          fi
 
       - name: Build SEA binary
         shell: bash
         working-directory: prompt-registry/packages/cli
-        run: pnpm run build:sea:local
+        run: |
+          if [ "${{ env.PACKAGE_MANAGER }}" = "pnpm" ]; then
+            pnpm run build:sea:local
+          else
+            npm run build:sea:local
+          fi
 
       - name: Rename binary to gh extension naming
         shell: bash
