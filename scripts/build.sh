@@ -14,6 +14,7 @@ REF="${PROMPT_REGISTRY_REF:-}"
 LOCAL=false
 PLATFORM=""
 LOCAL_REPO="${PROMPT_REGISTRY_REPO:-}"
+REPO_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -33,12 +34,21 @@ while [[ $# -gt 0 ]]; do
       LOCAL_REPO="$2"
       shift 2
       ;;
+    --repo)
+      REPO_OVERRIDE="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
       exit 1
       ;;
   esac
 done
+
+# Override official repo URL if --repo is provided
+if [ -n "$REPO_OVERRIDE" ]; then
+  OFFICIAL_REPO_URL="https://github.com/${REPO_OVERRIDE}.git"
+fi
 
 # Show configuration
 echo "Configuration:"
@@ -98,23 +108,14 @@ echo "Installing dependencies..."
 cd "$OFFICIAL_REPO_DIR"
 pnpm install
 
-# Build CLI
+# Build CLI (build all workspace packages first to ensure dependencies are available)
 echo "Building CLI..."
-pnpm run build
+pnpm -r run build
 
 # Build SEA binaries
 echo "Building SEA binaries..."
-if [ "$LOCAL" = true ]; then
-  # Build for current platform only
-  echo "Building for current platform only..."
-  cd "$OFFICIAL_REPO_DIR/packages/cli"
-  pnpm run build:sea:local
-else
-  # Build for all platforms (handled by CI matrix)
-  echo "Cross-platform builds handled by CI matrix"
-  echo "For local builds, use --local flag"
-  exit 1
-fi
+cd "$OFFICIAL_REPO_DIR/packages/cli"
+pnpm run build:sea:local
 
 # Rename binaries to gh extension naming convention
 echo "Renaming binaries to gh extension naming convention..."
@@ -130,23 +131,25 @@ done
 
 cd "$REPO_DIR"
 
-# Move only binary files and checksums to repository root
-echo "Moving binaries to repository root..."
-cd "$OFFICIAL_REPO_DIR/packages/cli/dist"
-for file in *; do
-  if [ -f "$file" ]; then
-    # Only move files that match the binary naming pattern (e.g., linux-x64, darwin-arm64)
-    # Skip TypeScript compilation artifacts (.js, .d.ts, .map files)
-    case "$file" in
-      *.js|*.d.ts|*.map)
-        echo "Skipping TypeScript artifact: $file"
-        ;;
-      *)
-        mv "$file" "$REPO_DIR/"
-        echo "Moved: $file"
-        ;;
-    esac
-  fi
-done
+# Move only binary files and checksums to repository root (local mode only)
+if [ "$LOCAL" = true ]; then
+  echo "Moving binaries to repository root..."
+  cd "$OFFICIAL_REPO_DIR/packages/cli/dist"
+  for file in *; do
+    if [ -f "$file" ]; then
+      # Only move files that match the binary naming pattern (e.g., linux-x64, darwin-arm64)
+      # Skip TypeScript compilation artifacts (.js, .d.ts, .map files)
+      case "$file" in
+        *.js|*.d.ts|*.map)
+          echo "Skipping TypeScript artifact: $file"
+          ;;
+        *)
+          mv "$file" "$REPO_DIR/"
+          echo "Moved: $file"
+          ;;
+      esac
+    fi
+  done
+fi
 
 echo "Build complete!"
