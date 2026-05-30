@@ -132,8 +132,13 @@ jobs:
                       new_name="$platform"
                     fi
                   fi
-                  mv "$file" "$new_name"
-                  echo "Renamed: $filename -> $new_name"
+                  # Skip if new name equals old name
+                  if [[ "$filename" != "$new_name" ]]; then
+                    mv "$file" "${dir}${new_name}"
+                    echo "Renamed: $filename -> $new_name"
+                  else
+                    echo "Skipping: $filename (already matches platform name)"
+                  fi
                 fi
               done
             fi
