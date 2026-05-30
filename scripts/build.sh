@@ -131,8 +131,9 @@ done
 
 cd "$REPO_DIR"
 
-# Move only binary files and checksums to repository root (local mode only)
+# Move binaries to appropriate location
 if [ "$LOCAL" = true ]; then
+  # Local mode: move to repository root
   echo "Moving binaries to repository root..."
   cd "$OFFICIAL_REPO_DIR/packages/cli/dist"
   for file in *; do
@@ -145,6 +146,26 @@ if [ "$LOCAL" = true ]; then
           ;;
         *)
           mv "$file" "$REPO_DIR/"
+          echo "Moved: $file"
+          ;;
+      esac
+    fi
+  done
+else
+  # CI mode: move to .tmp/dist for simple artifact upload
+  echo "Moving binaries to .tmp/dist for CI artifact upload..."
+  mkdir -p "$REPO_DIR/.tmp/dist"
+  cd "$OFFICIAL_REPO_DIR/packages/cli/dist"
+  for file in *; do
+    if [ -f "$file" ]; then
+      # Only move files that match the binary naming pattern (e.g., linux-x64, darwin-arm64)
+      # Skip TypeScript compilation artifacts (.js, .d.ts, .map files)
+      case "$file" in
+        *.js|*.d.ts|*.map)
+          echo "Skipping TypeScript artifact: $file"
+          ;;
+        *)
+          mv "$file" "$REPO_DIR/.tmp/dist/"
           echo "Moved: $file"
           ;;
       esac
