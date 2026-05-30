@@ -104,6 +104,40 @@ jobs:
               fi
             done
           done
+      - name: Rename files to match platform names
+        run: |
+          cd dist
+          # Rename files in each subdirectory to match the directory name (platform)
+          for dir in */; do
+            platform="${dir%/}"
+            if [ -d "$dir" ]; then
+              for file in "$dir"*; do
+                if [ -f "$file" ]; then
+                  filename=$(basename "$file")
+                  # Determine new name based on platform
+                  if [[ "$platform" == windows-* ]]; then
+                    # Windows: add .exe if not present
+                    if [[ "$filename" != *.exe ]] && [[ "$filename" != *.sha256 ]]; then
+                      new_name="${platform}.exe"
+                    elif [[ "$filename" == *.sha256 ]]; then
+                      new_name="${platform}.exe.sha256"
+                    else
+                      new_name="${platform}.exe"
+                    fi
+                  else
+                    # Non-Windows: use platform name directly
+                    if [[ "$filename" == *.sha256 ]]; then
+                      new_name="${platform}.sha256"
+                    else
+                      new_name="$platform"
+                    fi
+                  fi
+                  mv "$file" "$new_name"
+                  echo "Renamed: $filename -> $new_name"
+                fi
+              done
+            fi
+          done
       - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
